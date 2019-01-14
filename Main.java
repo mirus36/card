@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.*;
 
 public class Main {
     private static final Color WHITE_COLOR = new Color(255, 255, 255);
@@ -41,7 +42,7 @@ public class Main {
         }
     }
 
-    private static class Rectangle {
+    static class Rectangle {
         int x;
         int y;
         int width;
@@ -63,22 +64,30 @@ public class Main {
         }
         String imagesDirectory = args[0];
         List<String> imagesList = fileList(imagesDirectory);
-        StringBuffer out = new StringBuffer();
+        BlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
         for (String imagePath : imagesList) {
-            out.append(imagePath).append(" - ");
-            BufferedImage image = loadImage(imagePath);
-            List<Rectangle> whiteBorderedRectangles = getCardRectangles(image);
-            for (Rectangle rectangle : whiteBorderedRectangles) {
-                String letter = evalLetter(rectangle);
-                String rank = evalRank(rectangle);
-                out.append(letter).append(rank);
+            queue.add(new CardEvaluator(imagePath));
+        }
+
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                Runtime.getRuntime().availableProcessors() + 1,
+                Runtime.getRuntime().availableProcessors() + 1,
+                0L,
+                TimeUnit.MILLISECONDS,
+                queue
+        );
+        executor.prestartAllCoreThreads();
+
+        while (true) {
+            Thread.sleep(500);
+            if (queue.isEmpty()) {
+                executor.shutdown();
+                return;
             }
-            System.out.println(out);
-            out.setLength(0);
         }
     }
 
-    private static String evalRank(Rectangle rectangle) throws IOException {
+    static String evalRank(Rectangle rectangle) throws IOException {
         int maxX = 0, maxY = 0;
 
         for (int y = rectangle.height - 1; y > 0; y--) {
@@ -124,7 +133,7 @@ public class Main {
         return imgType;
     }
 
-    private static String evalLetter(Rectangle rectangle) throws IOException {
+    static String evalLetter(Rectangle rectangle) throws IOException {
         int minX = 0, minY = 0;
 
         for (int y = 0; y < rectangle.height; y++) {
@@ -232,11 +241,11 @@ public class Main {
         return fileNames;
     }
 
-    private static BufferedImage loadImage(String imagePath) throws IOException {
+    static BufferedImage loadImage(String imagePath) throws IOException {
         return ImageIO.read(new File(imagePath));
     }
 
-    private static List<Rectangle> getCardRectangles(BufferedImage image) {
+    static List<Rectangle> getCardRectangles(BufferedImage image) {
         int height = image.getHeight();
         int width = image.getWidth();
         List<Rectangle> rectangles = new ArrayList<>();
@@ -311,5 +320,34 @@ public class Main {
 
     private static boolean isRearColor(int rgb) {
         return GREY_COLOR.getRGB() == rgb || WHITE_COLOR.getRGB() == rgb;
+    }
+}
+
+class CardEvaluator implements Runnable{
+
+    private String imagePath;
+
+    CardEvaluator(String imagePath) {
+        this.imagePath = imagePath;
+    }
+
+    @Override
+    public void run() {
+        try {
+            StringBuilder out = new StringBuilder();
+            out.append(imagePath).append(" - ");
+            BufferedImage image = Main.loadImage(imagePath);
+
+            List<Main.Rectangle> whiteBorderedRectangles = Main.getCardRectangles(image);
+            for (Main.Rectangle rectangle : whiteBorderedRectangles) {
+                String letter = Main.evalLetter(rectangle);
+                String rank = Main.evalRank(rectangle);
+                out.append(letter).append(rank);
+            }
+            System.out.println(out);
+            out.setLength(0);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
