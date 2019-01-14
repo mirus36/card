@@ -14,6 +14,7 @@ import java.util.Map;
 
 public class Main {
     private static final Color WHITE_COLOR = new Color(255, 255, 255);
+    private static final Color GREY_COLOR = new Color(120, 120, 120);
     private static final String ROOT = Main.class.getClassLoader().getResource("").getPath() + "Mask/";
 
     private static final String[] LITERS = {"2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "K", "Q", "A"};
@@ -66,7 +67,7 @@ public class Main {
         for (String imagePath : imagesList) {
             out.append(imagePath).append(" - ");
             BufferedImage image = loadImage(imagePath);
-            List<Rectangle> whiteBorderedRectangles = getWhiteBorderedRectangles(image);
+            List<Rectangle> whiteBorderedRectangles = getCardRectangles(image);
             for (Rectangle rectangle : whiteBorderedRectangles) {
                 String letter = evalLetter(rectangle);
                 String rank = evalRank(rectangle);
@@ -81,28 +82,28 @@ public class Main {
         int maxX = 0, maxY = 0;
 
         for (int y = rectangle.height - 1; y > 0; y--) {
-            boolean rowIsWhite = true;
+            boolean rowIsRear = true;
             for (int x = rectangle.width -1; x > 0; x--) {
-                if (!isWhite(rectangle.rgbArray[x][y])) {
-                    rowIsWhite = false;
+                if (!isRearColor(rectangle.rgbArray[x][y])) {
+                    rowIsRear = false;
                     break;
                 }
             }
-            if (!rowIsWhite) {
+            if (!rowIsRear) {
                 maxY = y;
                 break;
             }
         }
 
         for (int x = rectangle.width - 1; x > 0; x--) {
-            boolean colIsWhite = true;
+            boolean colIsRear = true;
             for (int y = rectangle.height -1; y > 0; y--) {
-                if (!isWhite(rectangle.rgbArray[x][y])) {
-                    colIsWhite = false;
+                if (!isRearColor(rectangle.rgbArray[x][y])) {
+                    colIsRear = false;
                     break;
                 }
             }
-            if (!colIsWhite) {
+            if (!colIsRear) {
                 maxX = x;
                 break;
             }
@@ -127,28 +128,28 @@ public class Main {
         int minX = 0, minY = 0;
 
         for (int y = 0; y < rectangle.height; y++) {
-            boolean rowIsWhite = true;
+            boolean rowIsRear = true;
             for (int x = 0; x < rectangle.width; x++) {
-                if (!isWhite(rectangle.rgbArray[x][y])) {
-                    rowIsWhite = false;
+                if (!isRearColor(rectangle.rgbArray[x][y])) {
+                    rowIsRear = false;
                     break;
                 }
             }
-            if (!rowIsWhite) {
+            if (!rowIsRear) {
                 minY = y;
                 break;
             }
         }
 
         for (int x = 0; x < 25; x++) {
-            boolean colIsWhite = true;
+            boolean colIsRear = true;
             for (int y = 0; y < 25; y++) {
-                if (!isWhite(rectangle.rgbArray[x][y])) {
-                    colIsWhite = false;
+                if (!isRearColor(rectangle.rgbArray[x][y])) {
+                    colIsRear = false;
                     break;
                 }
             }
-            if (!colIsWhite) {
+            if (!colIsRear) {
                 minX = x;
                 break;
             }
@@ -179,7 +180,7 @@ public class Main {
                 {
                     for (int y = 0; y <  entry.getValue().getHeight(); y++) {
                         for (int x = 0; x < entry.getValue().getWidth(); x++) {
-                            if (!isWhite(image.getRGB(x, y)) && isWhite(entry.getValue().getRGB(x, y))) {
+                            if (!isRearColor(image.getRGB(x, y)) && isWhite(entry.getValue().getRGB(x, y))) {
                                 maskIsOk = false;
                                 break innerLoop;
                             }
@@ -203,7 +204,7 @@ public class Main {
             int error = 0;
             for (int y = 0; y < entry.getValue().getHeight(); y++) {
                 for (int x = 0; x < entry.getValue().getWidth(); x++) {
-                    if ((isWhite(image.getRGB(x, y)) && !isWhite(entry.getValue().getRGB(x, y))) || (!(isWhite(image.getRGB(x, y)) && isWhite(entry.getValue().getRGB(x, y))))) {
+                    if ((isRearColor(image.getRGB(x, y)) && !isWhite(entry.getValue().getRGB(x, y))) || (!(isRearColor(image.getRGB(x, y)) && isWhite(entry.getValue().getRGB(x, y))))) {
                         error++;
                     }
                 }
@@ -235,7 +236,7 @@ public class Main {
         return ImageIO.read(new File(imagePath));
     }
 
-    private static List<Rectangle> getWhiteBorderedRectangles(BufferedImage image) {
+    private static List<Rectangle> getCardRectangles(BufferedImage image) {
         int height = image.getHeight();
         int width = image.getWidth();
         List<Rectangle> rectangles = new ArrayList<>();
@@ -243,7 +244,13 @@ public class Main {
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 if (isWhite(image.getRGB(x, y)) && !belongsRectangles(x, y, rectangles)) {
-                    Rectangle rectangle = getRectangle(image, x, y, rectangles);
+                    Rectangle rectangle = getRectangle(image, x, y, WHITE_COLOR.getRGB(), rectangles);
+                    if (rectangle != null) {
+                        rectangles.add(rectangle);
+                    }
+                }
+                if (isGrey(image.getRGB(x, y)) && !belongsRectangles(x, y, rectangles)) {
+                    Rectangle rectangle = getRectangle(image, x, y, GREY_COLOR.getRGB(), rectangles);
                     if (rectangle != null) {
                         rectangles.add(rectangle);
                     }
@@ -254,15 +261,15 @@ public class Main {
         return rectangles;
     }
 
-    private static Rectangle getRectangle(BufferedImage image, int startX, int startY, List<Rectangle> otherRectangles) {
+    private static Rectangle getRectangle(BufferedImage image, int startX, int startY, int color, List<Rectangle> otherRectangles) {
         Rectangle imageRectangle = new Rectangle(0, 0, image.getWidth(), image.getHeight());
         int x = startX, y = startY;
 
-        while (belongsRectangle(x + 1, y, imageRectangle) && isWhite(image.getRGB(x + 1, y)) && !belongsRectangles(x + 1, y, otherRectangles)) {
+        while (belongsRectangle(x + 1, y, imageRectangle) && image.getRGB(x + 1, y) == color && !belongsRectangles(x + 1, y, otherRectangles)) {
             x += 1;
         }
 
-        while (belongsRectangle(x, y + 1, imageRectangle) && isWhite(image.getRGB(x, y +1))) {
+        while (belongsRectangle(x, y + 1, imageRectangle) && image.getRGB(x, y +1) == color) {
             y += 1;
         }
 
@@ -296,5 +303,13 @@ public class Main {
 
     private static boolean isWhite(int rgb) {
         return WHITE_COLOR.getRGB() == rgb;
+    }
+
+    private static boolean isGrey(int rgb) {
+        return GREY_COLOR.getRGB() == rgb;
+    }
+
+    private static boolean isRearColor(int rgb) {
+        return GREY_COLOR.getRGB() == rgb || WHITE_COLOR.getRGB() == rgb;
     }
 }
