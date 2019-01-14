@@ -13,16 +13,15 @@ import java.util.List;
 import java.util.Map;
 
 public class Main {
-
     private static final Color WHITE_COLOR = new Color(255, 255, 255);
     private static final String ROOT = Main.class.getClassLoader().getResource("").getPath() + "Mask/";
 
     private static final String[] LITERS = {"2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "K", "Q", "A"};
-    private static final Map<String, BufferedImage> LITER_MASKS = new HashMap<>();
+    private static final Map<String, BufferedImage> SIGN_MASKS = new HashMap<>();
     static {
         for (String name : LITERS) {
             try {
-                LITER_MASKS.put(name, loadImage(ROOT + name + ".png"));
+                SIGN_MASKS.put(name, loadImage(ROOT + name + ".png"));
             } catch (IOException e) {
                 System.exit(1);
             }
@@ -41,6 +40,20 @@ public class Main {
         }
     }
 
+    private static class Rectangle {
+        int x;
+        int y;
+        int width;
+        int height;
+        int[][] rgbArray;
+
+        Rectangle(int x, int y, int width, int height) {
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+        }
+    }
 
     public static void main(String[] args) throws Exception {
         if (args.length != 1) {
@@ -64,14 +77,13 @@ public class Main {
         }
     }
 
-
     private static String evalRank(Rectangle rectangle) throws IOException {
         int maxX = 0, maxY = 0;
 
         for (int y = rectangle.height - 1; y > 0; y--) {
             boolean rowIsWhite = true;
             for (int x = rectangle.width -1; x > 0; x--) {
-                if (rectangle.rgbArray[x][y] != WHITE_COLOR.getRGB()) {
+                if (!isWhite(rectangle.rgbArray[x][y])) {
                     rowIsWhite = false;
                     break;
                 }
@@ -85,7 +97,7 @@ public class Main {
         for (int x = rectangle.width - 1; x > 0; x--) {
             boolean colIsWhite = true;
             for (int y = rectangle.height -1; y > 0; y--) {
-                if (rectangle.rgbArray[x][y] != WHITE_COLOR.getRGB()) {
+                if (!isWhite(rectangle.rgbArray[x][y])) {
                     colIsWhite = false;
                     break;
                 }
@@ -103,55 +115,9 @@ public class Main {
             }
         }
 
-        String imgType = null;
-        outerLoop:
-        {
-            for (Map.Entry<String, BufferedImage> entry : RANKS_MASKS.entrySet()) {
-                boolean maskIsOk = true;
-                innerLoop:
-                {
-                    for (int y = 0; y < 30; y++) {
-                        for (int x = 0; x < 30; x++) {
-                            if (image.getRGB(x, y) != WHITE_COLOR.getRGB() && entry.getValue().getRGB(x, y) == WHITE_COLOR.getRGB()) {
-                                maskIsOk = false;
-                                break innerLoop;
-                            }
-                        }
-                    }
-                }
-                if (maskIsOk) {
-                    imgType = entry.getKey();
-                    break outerLoop;
-                }
-            }
-        }
-
-
+        String imgType = evalBestMatch(image, RANKS_MASKS);
         if (imgType == null) {
-            int minError = 0;
-            String type = null;
-            for (Map.Entry<String, BufferedImage> entry : RANKS_MASKS.entrySet()) {
-                int error = 0;
-                for (int y = 0; y < 30; y++) {
-                    for (int x = 0; x < 30; x++) {
-                        if ((image.getRGB(x, y) == WHITE_COLOR.getRGB() && entry.getValue().getRGB(x, y) != WHITE_COLOR.getRGB()) ||
-                                (image.getRGB(x, y) != WHITE_COLOR.getRGB() && entry.getValue().getRGB(x, y) == WHITE_COLOR.getRGB())) {
-                            error++;
-                        }
-                    }
-                }
-                if (type == null) {
-                    type = entry.getKey();
-                    minError = error;
-                } else {
-                    if (error < minError) {
-                        minError = error;
-                        type = entry.getKey();
-                    }
-                }
-            }
-
-            imgType = type;
+            imgType = evalFullMatch(image, RANKS_MASKS);
         }
 
         return imgType;
@@ -163,7 +129,7 @@ public class Main {
         for (int y = 0; y < rectangle.height; y++) {
             boolean rowIsWhite = true;
             for (int x = 0; x < rectangle.width; x++) {
-                if (rectangle.rgbArray[x][y] != WHITE_COLOR.getRGB()) {
+                if (!isWhite(rectangle.rgbArray[x][y])) {
                     rowIsWhite = false;
                     break;
                 }
@@ -177,7 +143,7 @@ public class Main {
         for (int x = 0; x < 25; x++) {
             boolean colIsWhite = true;
             for (int y = 0; y < 25; y++) {
-                if (rectangle.rgbArray[x][y] != WHITE_COLOR.getRGB()) {
+                if (!isWhite(rectangle.rgbArray[x][y])) {
                     colIsWhite = false;
                     break;
                 }
@@ -195,23 +161,31 @@ public class Main {
             }
         }
 
+        String imgType = evalBestMatch(image, SIGN_MASKS);
+        if (imgType == null) {
+            imgType = evalFullMatch(image, SIGN_MASKS);
+        }
+
+        return imgType;
+    }
+
+    private static String evalBestMatch(BufferedImage image, Map<String, BufferedImage> masks) {
         String imgType = null;
         outerLoop:
         {
-            for (Map.Entry<String, BufferedImage> entry : LITER_MASKS.entrySet()) {
+            for (Map.Entry<String, BufferedImage> entry : masks.entrySet()) {
                 boolean maskIsOk = true;
                 innerLoop:
                 {
-                    for (int y = 0; y < 25; y++) {
-                        for (int x = 0; x < 25; x++) {
-                            if (image.getRGB(x, y) != WHITE_COLOR.getRGB() && entry.getValue().getRGB(x, y) == WHITE_COLOR.getRGB()) {
+                    for (int y = 0; y <  entry.getValue().getHeight(); y++) {
+                        for (int x = 0; x < entry.getValue().getWidth(); x++) {
+                            if (!isWhite(image.getRGB(x, y)) && isWhite(entry.getValue().getRGB(x, y))) {
                                 maskIsOk = false;
                                 break innerLoop;
                             }
                         }
                     }
                 }
-
                 if (maskIsOk) {
                     imgType = entry.getKey();
                     break outerLoop;
@@ -219,37 +193,34 @@ public class Main {
             }
         }
 
-
-        if (imgType == null) {
-            int minError = 0;
-            String type = null;
-            for (Map.Entry<String, BufferedImage> entry : LITER_MASKS.entrySet()) {
-                int error = 0;
-                for (int y = 0; y < 25; y++) {
-                    for (int x = 0; x < 25; x++) {
-                        if ((image.getRGB(x, y) == WHITE_COLOR.getRGB() && entry.getValue().getRGB(x, y) != WHITE_COLOR.getRGB()) ||
-                                (image.getRGB(x, y) != WHITE_COLOR.getRGB() && entry.getValue().getRGB(x, y) == WHITE_COLOR.getRGB())) {
-                            error++;
-                        }
-                    }
-                }
-                if (type == null) {
-                    type = entry.getKey();
-                    minError = error;
-                } else {
-                    if (error < minError) {
-                        minError = error;
-                        type = entry.getKey();
-                    }
-                }
-            }
-
-            imgType = type;
-        }
-
         return imgType;
     }
 
+    private static String evalFullMatch(BufferedImage image, Map<String, BufferedImage> masks) {
+        int minError = 0;
+        String type = null;
+        for (Map.Entry<String, BufferedImage> entry : masks.entrySet()) {
+            int error = 0;
+            for (int y = 0; y < entry.getValue().getHeight(); y++) {
+                for (int x = 0; x < entry.getValue().getWidth(); x++) {
+                    if ((isWhite(image.getRGB(x, y)) && !isWhite(entry.getValue().getRGB(x, y))) || (!(isWhite(image.getRGB(x, y)) && isWhite(entry.getValue().getRGB(x, y))))) {
+                        error++;
+                    }
+                }
+            }
+            if (type == null) {
+                type = entry.getKey();
+                minError = error;
+            } else {
+                if (error < minError) {
+                    minError = error;
+                    type = entry.getKey();
+                }
+            }
+        }
+
+        return type;
+    }
 
     private static List<String> fileList(String directory) throws IOException {
         List<String> fileNames = new ArrayList<>();
@@ -271,8 +242,7 @@ public class Main {
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                int pixelRGB = image.getRGB(x, y);
-                if (WHITE_COLOR.getRGB() == pixelRGB && !belongsRectangles(x, y, rectangles)) {
+                if (isWhite(image.getRGB(x, y)) && !belongsRectangles(x, y, rectangles)) {
                     Rectangle rectangle = getRectangle(image, x, y, rectangles);
                     if (rectangle != null) {
                         rectangles.add(rectangle);
@@ -284,31 +254,15 @@ public class Main {
         return rectangles;
     }
 
-    private static class Rectangle {
-        int x;
-        int y;
-        int width;
-        int height;
-        int[][] rgbArray;
-    }
-
     private static Rectangle getRectangle(BufferedImage image, int startX, int startY, List<Rectangle> otherRectangles) {
-
-        int height = image.getHeight(), width = image.getWidth();
-
-        Rectangle imageRectangle = new Rectangle();
-        imageRectangle.x = 0;
-        imageRectangle.y = 0;
-        imageRectangle.height = height;
-        imageRectangle.width = width;
-
+        Rectangle imageRectangle = new Rectangle(0, 0, image.getWidth(), image.getHeight());
         int x = startX, y = startY;
 
-        while (belongsRectangle(x + 1, y, imageRectangle) && isWhite(image, x + 1, y) && !belongsRectangles(x + 1, y, otherRectangles)) {
+        while (belongsRectangle(x + 1, y, imageRectangle) && isWhite(image.getRGB(x + 1, y)) && !belongsRectangles(x + 1, y, otherRectangles)) {
             x += 1;
         }
 
-        while (belongsRectangle(x, y + 1, imageRectangle) && isWhite(image, x, y + 1)) {
+        while (belongsRectangle(x, y + 1, imageRectangle) && isWhite(image.getRGB(x, y +1))) {
             y += 1;
         }
 
@@ -316,11 +270,7 @@ public class Main {
             return null;
         }
 
-        Rectangle result = new Rectangle();
-        result.x = startX;
-        result.y = startY;
-        result.height = y - startY;
-        result.width = x - startX;
+        Rectangle result = new Rectangle(startX, startY, x - startX, y - startY);
         result.rgbArray = new int[result.width][result.height];
         for (int i = 0; i < result.width; i++) {
             for (int j = 0; j < result.height; j++) {
@@ -344,21 +294,7 @@ public class Main {
         return x >= rectangle.x && x <= rectangle.x + rectangle.width && y >= rectangle.y && y <= rectangle.y + rectangle.height;
     }
 
-    private static boolean isWhite(BufferedImage image, int x, int y) {
-        return WHITE_COLOR.getRGB() == image.getRGB(x, y);
+    private static boolean isWhite(int rgb) {
+        return WHITE_COLOR.getRGB() == rgb;
     }
-
-    private static int findMaxIndex(int[] arr) {
-        int max = arr[0];
-        int maxIdx = 0;
-        for (int i = 1; i < arr.length; i++) {
-            if (arr[i] > max) {
-                max = arr[i];
-                maxIdx = i;
-            }
-        }
-        return maxIdx;
-    }
-
-
 }
